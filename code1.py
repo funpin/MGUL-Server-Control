@@ -1,3 +1,4 @@
+
 import json
 
 # список ошибок (временные промежутки аномалий на сервере)
@@ -15,25 +16,32 @@ TotalState = {'SWAP_Used':0, 'SWAP_Total':0, 'RAM_Used':0, 'RAM_Total':0,
 
 # метод добавления ошибок с соответствующим сообщением
 def _addError(s_hour, s_min, str_Err):
+    ss_hour = str(s_hour)
+    s1_hour = str(s_hour + 1)
+    if int(s_hour) < 10:
+        ss_hour = '0' + str(s_hour)
+        s1_hour = '0' + str(s_hour + 1)
+        if int(s_hour) == 9:
+            s1_hour = str(s_hour + 1)
     if (s_min >= 25 and s_min <= 30):
-        ErrorList.append(str(s_hour) + ':00 - ' + str(s_hour) + ':30 : ' + str_Err)
+        ErrorList.append(ss_hour + ':00 - ' + ss_hour + ':30 -> ' + str_Err)
     elif (s_min >= 55 and s_min <= 59):
-        ErrorList.append(str(s_hour) + ':30 - ' + str(s_hour + 1) + ':00 : ' + str_Err)
+        ErrorList.append(ss_hour + ':30 - ' + s1_hour + ':00 -> ' + str_Err)
     return
 
 # вся обработка по открытии файла (.json)
-with open ("C:/Users/sasha/Downloads/fall.json") as json_string:
+with open ("C:/Users/sasha/Downloads/log.json") as json_string:
     data = json.load(json_string)
 
-    i5 = 0  # записи во время, где число минут кратно 5
-    ir = 0  # все остальные записи с рандомным временем
+    i5 = 0              # записи во время, где число минут кратно 5
+    ir = 0              # все остальные записи с рандомным временем
     last_min = 0
     twice_5 = False     # проверка на избыточные граничные записи
     twice = False       # проверка на дублирование записей в целом
     extra = False       # флаг допуска к условию пересчета и печати
     skip = False        # флаг обхода дополнительной проверки
     GO_IN = False       # флаг последнего вхождения для печати оставшейся информации
-    am_pm = False
+    am_pm = False       # перевод формата для перехода между диапазонами
 
     for key in data:
         # chek selected device (ИМЕННО НА ВЫБРАННЫЙ ДЕВАЙС)
@@ -56,15 +64,17 @@ with open ("C:/Users/sasha/Downloads/fall.json") as json_string:
             if not GO_IN:
                 hour = int(data[str(key)]['Date'][11] + data[str(key)]['Date'][12])
                 min = int(data[str(key)]['Date'][14] + data[str(key)]['Date'][15])
+                minNext = int(data[str(int(key) + 1)]['Date'][14] + data[str(int(key) + 1)]['Date'][15])
 
             # срочная печать данных за интервал, который уже прошел
-            if (min >= 30 and am_pm == False) or (min <= 30 and am_pm == True):
+            if (minNext >= 30 and am_pm == False) or (minNext < 30 and am_pm == True):
                 am_pm = not am_pm
                 extra = True
                 skip = True
+                twice_5 = False
 
             # дублирование записей в промежутке времени
-            twice = not last_min == min
+            twice = (last_min == min)
             last_min = min
 
             # повторное вхождение
@@ -79,12 +89,13 @@ with open ("C:/Users/sasha/Downloads/fall.json") as json_string:
                 skip = True
 
             # подсчет только "правильных" записей
-            if (not GO_IN):
+            if (not GO_IN and not extra):
                 if (min % 5 == 0):
                     i5 += 1
                 else:
                     ir += 1
 
+            # вывод времени записей, включенных в диапазонный подсчет
             if (not skip):
                 print(data[str(key)]['Date'])
 
@@ -138,15 +149,16 @@ with open ("C:/Users/sasha/Downloads/fall.json") as json_string:
 
                 twice_5 = False
                 if not GO_IN:
-                    if (i5 == 6) and (ir == 0):
+                    if (i5 == 5) and (ir == 0):
                         strErr = "Все в порядке."
-                    elif (i5 + ir == 6):
+                        # _addError(hour, min, strErr) # check
+                    elif (i5 + ir == 5):
                         strErr = "Ненормальная работа: остановка или сбои в работе. Записи в нужном числе."
                         _addError(hour, min, strErr)
-                    elif (i5 + ir < 6 and i5 + ir > 0):
-                        strErr = "Остановка работы на продолжительное время. Записи частично утеряны."
+                    elif (i5 + ir < 5 and i5 + ir > 0):
+                        strErr = "Остановка работы на некоторое время. Записи частично утеряны."
                         _addError(hour, min, strErr)
-                    elif i5 + ir == 0:
+                    elif i5 + ir == 0: # non work
                         strErr = "Сервер не работал."
                         _addError(hour, min, strErr)
 
